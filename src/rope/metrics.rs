@@ -9,6 +9,8 @@ use crate::tree::{DoubleEndedUnitMetric, Metric, SlicingMetric, UnitMetric};
 pub struct ChunkSummary {
     bytes: usize,
     line_breaks: usize,
+    #[cfg(feature = "graphemes")]
+    graphemes: usize,
     #[cfg(feature = "utf16-metric")]
     utf16_code_units: usize,
 }
@@ -19,6 +21,8 @@ impl From<&str> for ChunkSummary {
         Self {
             bytes: s.len(),
             line_breaks: count::line_breaks(s),
+            #[cfg(feature = "graphemes")]
+            graphemes: count::graphemes(s),
             #[cfg(feature = "utf16-metric")]
             utf16_code_units: count::utf16_code_units(s),
         }
@@ -31,6 +35,8 @@ impl From<char> for ChunkSummary {
         Self {
             bytes: ch.len_utf8(),
             line_breaks: (ch == '\n') as usize,
+            #[cfg(feature = "graphemes")]
+            graphemes: 1,
             #[cfg(feature = "utf16-metric")]
             utf16_code_units: ch.len_utf16(),
         }
@@ -237,6 +243,13 @@ impl SummaryUpTo for ByteMetric {
                 str_summary.line_breaks,
             ),
 
+            #[cfg(feature = "graphemes")]
+            graphemes: count::graphemes_up_to(
+                in_str,
+                byte_offset,
+                str_summary.graphemes,
+            ),
+
             #[cfg(feature = "utf16-metric")]
             utf16_code_units: count::utf16_code_units_up_to(
                 in_str,
@@ -355,6 +368,13 @@ impl SummaryUpTo for RawLineMetric {
             bytes: byte_offset,
 
             line_breaks: line_offset,
+
+            #[cfg(feature = "graphemes")]
+            graphemes: count::graphemes_up_to(
+                in_str,
+                byte_offset,
+                str_summary.graphemes,
+            ),
 
             #[cfg(feature = "utf16-metric")]
             utf16_code_units: count::utf16_code_units_up_to(
@@ -707,6 +727,8 @@ mod str_utils {
     use str_indices::lines_lf as lines;
     #[cfg(all(not(miri), feature = "utf16-metric"))]
     use str_indices::utf16;
+    #[cfg(feature = "graphemes")]
+    use unicode_segmentation::UnicodeSegmentation;
 
     pub mod count {
         #[cfg(not(miri))]
@@ -722,6 +744,12 @@ mod str_utils {
             {
                 s.bytes().filter(|&b| b == b'\n').count()
             }
+        }
+
+        #[cfg(feature = "graphemes")]
+        #[inline]
+        pub fn graphemes(s: &str) -> usize {
+            s.graphemes(true).count()
         }
 
         #[cfg(feature = "utf16-metric")]
@@ -744,6 +772,16 @@ mod str_utils {
             tot_line_breaks: usize,
         ) -> usize {
             metric_up_to(s, byte_offset, tot_line_breaks, line_breaks)
+        }
+
+        #[cfg(feature = "graphemes")]
+        #[inline(always)]
+        pub fn graphemes_up_to(
+            s: &str,
+            byte_offset: usize,
+            tot_graphemes: usize,
+        ) -> usize {
+            metric_up_to(s, byte_offset, tot_graphemes, graphemes)
         }
 
         #[cfg(feature = "utf16-metric")]
